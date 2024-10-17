@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebRTC Chat</title>
+  <style>
+    body {
+      background-color: #0A0A0A;
+      font-family: 'Arial', sans-serif;
+      color: #fff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    .chat-container {
+      width: 500px;
+      height: 600px;
+      background-color: #1f1f1f;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 0 15px rgba(255, 158, 0, 0.6);
+      display: flex;
+      flex-direction: column;
+    }
+
+    #chat-log {
+      flex-grow: 1;
+      padding: 10px;
+      background-color: #333;
+      border-radius: 5px;
+      overflow-y: auto;
+      margin-bottom: 20px;
+      max-height: 500px;
+    }
+
+    #chat-log div {
+      margin-bottom: 15px;
+      word-wrap: break-word;
+    }
+
+    .message.self {
+      text-align: right;
+      color: #ff9e00;
+    }
+
+    .message.peer {
+      text-align: left;
+      color: #fff;
+    }
+
+    #message {
+      width: 80%;
+      padding: 10px;
+      border-radius: 5px;
+      background-color: #444;
+      border: none;
+      color: #fff;
+    }
+
+    #send-button {
+      width: 15%;
+      padding: 10px;
+      margin-left: 10px;
+      border-radius: 5px;
+      background-color: #ff9e00;
+      border: none;
+      cursor: pointer;
+    }
+
+    #send-button:hover {
+      background-color: #ff7500;
+    }
+
+    #connect-btn {
+      margin-bottom: 20px;
+      padding: 10px;
+      background-color: #ff9e00;
+      color: #000;
+      border-radius: 5px;
+      border: none;
+      cursor: pointer;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="chat-container">
+    <button id="connect-btn">Start Connection</button>
+    <div id="chat-log"></div>
+    <div>
+      <input type="text" id="message" placeholder="Type a message..." autocomplete="off">
+      <button id="send-button">Send</button>
+    </div>
+  </div>
+
+  <script>
+    const chatLog = document.getElementById('chat-log');
+    const messageInput = document.getElementById('message');
+    const sendButton = document.getElementById('send-button');
+    const connectBtn = document.getElementById('connect-btn');
+
+    let peerConnection;
+    let dataChannel;
+
+    const configuration = {
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] // Public STUN server to facilitate NAT traversal
+    };
+
+    // Function to create a new peer connection
+    function createPeerConnection() {
+      peerConnection = new RTCPeerConnection(configuration);
+
+      // Set up event listener for data channel
+      peerConnection.ondatachannel = (event) => {
+        dataChannel = event.channel;
+        setupDataChannel();
+      };
+
+      // Set up ICE candidate handling
+      peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+          // Normally we would send this candidate over signaling to the other peer
+          console.log('New ICE candidate', event.candidate);
+        }
+      };
+    }
+
+    // Function to set up data channel event handlers
+    function setupDataChannel() {
+      dataChannel.onmessage = (event) => {
+        const message = event.data;
+        addMessageToLog(message, 'peer');
+      };
+
+      dataChannel.onopen = () => {
+        console.log('Data channel opened');
+      };
+
+      dataChannel.onclose = () => {
+        console.log('Data channel closed');
+      };
+    }
+
+    // Add message to chat log
+    function addMessageToLog(message, type) {
+      const messageDiv = document.createElement('div');
+      messageDiv.textContent = message;
+      messageDiv.classList.add('message', type);
+      chatLog.appendChild(messageDiv);
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+
+    // Send message over data channel
+    function sendMessage() {
+      const message = messageInput.value;
+      if (message && dataChannel && dataChannel.readyState === 'open') {
+        dataChannel.send(message);
+        addMessageToLog(message, 'self');
+        messageInput.value = '';
+      }
+    }
+
+    // Create an offer (initiating connection)
+    async function createOffer() {
+      createPeerConnection();
+
+      // Create data channel (for the initiating peer)
+      dataChannel = peerConnection.createDataChannel('chat');
+      setupDataChannel();
+
+      const offer = await peerConnection.createOffer();
+      await peerConnection.setLocalDescription(offer);
+
+      console.log('Offer created:', offer);
+      // Normally we would send the offer to the other peer via signaling
+    }
+
+    // Event listener for the "Send" button
+    sendButton.addEventListener('click', sendMessage);
+
+    // Event listener for pressing Enter to send messages
+    messageInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        sendMessage();
+      }
+    });
+
+    // Start connection on button click
+    connectBtn.addEventListener('click', createOffer);
+  </script>
+
+</body>
+</html>
