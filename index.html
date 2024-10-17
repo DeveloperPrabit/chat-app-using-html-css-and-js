@@ -75,7 +75,7 @@
       background-color: #ff7500;
     }
 
-    #connect-btn {
+    #connect-btn, #answer-btn {
       margin-bottom: 20px;
       padding: 10px;
       background-color: #ff9e00;
@@ -85,12 +85,23 @@
       cursor: pointer;
       width: 100%;
     }
+
+    #sdp-box {
+      margin-bottom: 10px;
+      background-color: #444;
+      color: #fff;
+      padding: 10px;
+      border-radius: 5px;
+      width: 100%;
+    }
   </style>
 </head>
 <body>
 
   <div class="chat-container">
-    <button id="connect-btn">Start Connection</button>
+    <button id="connect-btn">Create Offer</button>
+    <textarea id="sdp-box" placeholder="Paste SDP here..."></textarea>
+    <button id="answer-btn">Paste Answer & Connect</button>
     <div id="chat-log"></div>
     <div>
       <input type="text" id="message" placeholder="Type a message..." autocomplete="off">
@@ -103,6 +114,8 @@
     const messageInput = document.getElementById('message');
     const sendButton = document.getElementById('send-button');
     const connectBtn = document.getElementById('connect-btn');
+    const answerBtn = document.getElementById('answer-btn');
+    const sdpBox = document.getElementById('sdp-box');
 
     let peerConnection;
     let dataChannel;
@@ -124,8 +137,7 @@
       // Set up ICE candidate handling
       peerConnection.onicecandidate = (event) => {
         if (event.candidate) {
-          // Normally we would send this candidate over signaling to the other peer
-          console.log('New ICE candidate', event.candidate);
+          console.log('New ICE candidate:', event.candidate);
         }
       };
     }
@@ -176,8 +188,41 @@
       const offer = await peerConnection.createOffer();
       await peerConnection.setLocalDescription(offer);
 
-      console.log('Offer created:', offer);
-      // Normally we would send the offer to the other peer via signaling
+      console.log('Offer created:', offer.sdp);
+      sdpBox.value = offer.sdp; // Display the offer to be copied
+    }
+
+    // Answer the offer (for the receiving peer)
+    async function createAnswer() {
+      createPeerConnection();
+
+      const remoteSdp = sdpBox.value;
+      if (!remoteSdp) {
+        alert('Please paste the SDP offer from the other peer.');
+        return;
+      }
+
+      // Set the remote description with the SDP offer
+      await peerConnection.setRemoteDescription({ type: 'offer', sdp: remoteSdp });
+
+      // Create the answer SDP
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+
+      console.log('Answer created:', answer.sdp);
+      sdpBox.value = answer.sdp; // Display the answer to be copied
+    }
+
+    // Accept the answer
+    async function acceptAnswer() {
+      const remoteSdp = sdpBox.value;
+      if (!remoteSdp) {
+        alert('Please paste the SDP answer from the other peer.');
+        return;
+      }
+
+      await peerConnection.setRemoteDescription({ type: 'answer', sdp: remoteSdp });
+      console.log('Connected!');
     }
 
     // Event listener for the "Send" button
@@ -190,8 +235,11 @@
       }
     });
 
-    // Start connection on button click
+    // Create the offer on button click (for caller)
     connectBtn.addEventListener('click', createOffer);
+
+    // Create the answer on button click (for receiver)
+    answerBtn.addEventListener('click', createAnswer);
   </script>
 
 </body>
